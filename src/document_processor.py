@@ -2,12 +2,15 @@
 Document processing integration that combines classification with extraction.
 """
 
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass
 import time
+import io
 
 from document_classifier import create_classifier, DocumentType, ClassificationResult
 from ml_fallback import create_hybrid_classifier
+from ocr_service import create_ocr_service, OCRResult
+from visualization import create_visualizer
 from logger import app_logger
 
 
@@ -19,6 +22,10 @@ class ProcessingResult:
     processing_time: float
     suggested_fields: List[str]
     confidence_level: str
+    ocr_result: Optional[OCRResult] = None
+    has_tables: bool = False
+    table_count: int = 0
+    extraction_method: str = "text"  # "text", "ocr", "hybrid"
 
 
 class DocumentProcessor:
@@ -27,7 +34,7 @@ class DocumentProcessor:
     """
     
     def __init__(self):
-        """Initialize document processor with classifiers."""
+        """Initialize document processor with classifiers and OCR."""
         app_logger.info("Initializing document processor")
         
         # Initialize heuristic classifier
@@ -35,6 +42,17 @@ class DocumentProcessor:
         
         # Initialize hybrid classifier with ML fallback
         self.hybrid_classifier = create_hybrid_classifier(self.heuristic_classifier)
+        
+        # Initialize OCR service (will be None if no API key)
+        try:
+            self.ocr_service = create_ocr_service()
+            app_logger.info("OCR service initialized successfully")
+        except Exception as e:
+            app_logger.warning(f"OCR service not available: {e}")
+            self.ocr_service = None
+        
+        # Initialize visualizer
+        self.visualizer = create_visualizer()
         
         # Field extraction templates based on document types
         self._setup_extraction_templates()
@@ -132,6 +150,57 @@ class DocumentProcessor:
                 "Legal Citations"
             ]
         }
+    
+    def process_file(self, file_data: bytes, file_type: str, file_name: str,
+                    user_fields: Optional[List[str]] = None) -> ProcessingResult:
+        """
+        Process document file (PDF or image) with OCR and classification.
+        
+        Args:
+            file_data: File bytes
+            file_type: File MIME type
+            file_name: Original file name
+            user_fields: Optional user-specified fields to extract
+            
+        Returns:
+            ProcessingResult with comprehensive analysis
+        """
+        start_time = time.time()
+        app_logger.info(f"Processing file: {file_name} ({file_type})")
+        
+        ocr_result = None
+        extraction_method = "text"
+        
+        # Determine processing method based on file type
+        if file_type == "application/pdf":
+            text, ocr_result = self._process_pdf(file_data)
+            extraction_method = "ocr" if ocr_result else "text"
+        elif file_type.startswith("image/"):
+            text, ocr_result = self._process_image(file_data)  
+            extraction_method = "ocr" if ocr_result else "text"
+        else:
+            # Text-based processing fallback
+            text = f"Unsupported file type: {file_type}"
+            app_logger.warning(f"Unsupported file type: {file_type}")
+        
+        # Continue with standard document processing
+        result = self.process_document(text, user_fields)
+        
+        # Enhance result with OCR data
+        result.ocr_result = ocr_result
+        result.extraction_method = extraction_method
+        
+        if ocr_result:
+            result.has_tables = len(ocr_result.tables) > 0
+            result.table_count = len(ocr_result.tables)
+            
+            # Enhanced field extraction using OCR data
+            result.extracted_fields.update(
+                self._extract_fields_from_ocr(ocr_result, result.suggested_fields)
+            )
+        
+        app_logger.info(f"File processing completed in {result.processing_time:.2f}s")
+        return result
     
     def process_document(self, text: str, user_fields: Optional[List[str]] = None) -> ProcessingResult:
         """
@@ -249,6 +318,162 @@ class DocumentProcessor:
             return self.extraction_templates.get(doc_type_enum, [])
         except ValueError:
             return []
+    
+    def _process_pdf(self, pdf_data: bytes) -> tuple[str, Optional[OCRResult]]:
+        """Process PDF file using OpenAI API directly."""
+        text = ""
+        ocr_result = None
+        
+        try:
+            if self.ocr_service:
+                # Use OpenAI for direct PDF processing
+                app_logger.info("Processing PDF with OpenAI API")
+                ocr_results = self.ocr_service.extract_from_pdf(pdf_data)
+                
+                if ocr_results:
+                    # Combine text from all pages/results
+                    text = "\n\n--- PAGE BREAK ---\n\n".join(
+                        result.raw_text for result in ocr_results
+                    )
+                    
+                    # Use first result for detailed analysis
+                    ocr_result = ocr_results[0]
+                    
+                    app_logger.info(f"PDF processing completed: {len(ocr_results)} results")
+                    return text, ocr_result
+                else:
+                    text = "PDF processing failed - no content extracted"
+            else:
+                # No OCR service available
+                app_logger.warning("PDF processing requires OpenAI API key")
+                text = "PDF processing requires OpenAI API key for full functionality"
+                
+        except Exception as e:
+            app_logger.error(f"PDF processing failed: {e}")
+            text = f"PDF processing error: {str(e)}"
+        
+        return text, ocr_result
+    
+    def _process_image(self, image_data: bytes) -> tuple[str, Optional[OCRResult]]:
+        """Process image file with OCR if available."""
+        text = ""
+        ocr_result = None
+        
+        try:
+            if self.ocr_service:
+                # Use OCR for image processing
+                app_logger.info("Processing image with OCR")
+                ocr_result = self.ocr_service.extract_from_image(image_data)
+                text = ocr_result.raw_text
+                
+                app_logger.info(f"Image OCR completed: {len(text)} characters extracted")
+            else:
+                # No OCR available
+                app_logger.warning("Image processing requires OCR service")
+                text = "Image processing requires OCR service - please configure OpenAI API key"
+                
+        except Exception as e:
+            app_logger.error(f"Image processing failed: {e}")
+            text = f"Image processing error: {str(e)}"
+        
+        return text, ocr_result
+    
+    def _extract_fields_from_ocr(self, ocr_result: OCRResult, 
+                                suggested_fields: List[str]) -> Dict[str, Any]:
+        """Extract specific fields using OCR data and table information."""
+        extracted = {}
+        
+        try:
+            # Extract from tables if available
+            if ocr_result.tables:
+                table_data = self._extract_from_tables(ocr_result.tables, suggested_fields)
+                extracted.update(table_data)
+            
+            # Extract from totals analysis
+            if ocr_result.totals_analysis:
+                totals_data = self._extract_from_totals(ocr_result.totals_analysis, suggested_fields)
+                extracted.update(totals_data)
+            
+            # Extract from structured text
+            text_data = self._extract_from_structured_text(ocr_result.structured_text, suggested_fields)
+            extracted.update(text_data)
+            
+            app_logger.info(f"OCR field extraction completed: {len(extracted)} fields found")
+            
+        except Exception as e:
+            app_logger.warning(f"OCR field extraction failed: {e}")
+        
+        return extracted
+    
+    def _extract_from_tables(self, tables: List, suggested_fields: List[str]) -> Dict[str, Any]:
+        """Extract fields from table data."""
+        extracted = {}
+        
+        for table_idx, table in enumerate(tables):
+            # Extract totals from tables
+            for cell in table.cells:
+                cell_content = cell.content.lower()
+                
+                # Look for total amounts
+                if any(word in cell_content for word in ['total', 'amount', 'sum']):
+                    # Try to extract numeric value
+                    import re
+                    amounts = re.findall(r'\$?\d+(?:\.\d+)?', cell.content)
+                    if amounts:
+                        key = f"Table_{table_idx + 1}_Total"
+                        extracted[key] = amounts[0]
+                
+                # Look for dates
+                if any(word in cell_content for word in ['date', 'due']):
+                    dates = re.findall(r'\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}', cell.content)
+                    if dates:
+                        key = f"Table_{table_idx + 1}_Date"
+                        extracted[key] = dates[0]
+        
+        return extracted
+    
+    def _extract_from_totals(self, totals_analysis: Dict[str, Any], 
+                           suggested_fields: List[str]) -> Dict[str, Any]:
+        """Extract fields from totals analysis."""
+        extracted = {}
+        
+        amounts = totals_analysis.get('amounts', [])
+        for amount in amounts:
+            context = amount.get('context', 'amount')
+            value = amount.get('value', 0)
+            
+            # Map contexts to field names
+            field_mapping = {
+                'total': 'Total Amount',
+                'subtotal': 'Subtotal',
+                'tax': 'Tax Amount',
+                'discount': 'Discount',
+                'balance': 'Balance Due'
+            }
+            
+            field_name = field_mapping.get(context, context.title())
+            extracted[field_name] = f"${value:.2f}"
+        
+        return extracted
+    
+    def _extract_from_structured_text(self, structured_text: List, 
+                                    suggested_fields: List[str]) -> Dict[str, Any]:
+        """Extract fields from structured text elements."""
+        extracted = {}
+        
+        for text_element in structured_text:
+            element_text = text_element.text
+            element_type = text_element.element_type
+            
+            # Extract based on element type and content
+            if element_type == 'date':
+                extracted['Document Date'] = element_text
+            elif element_type == 'currency' and 'Total' not in extracted:
+                extracted['Amount'] = element_text
+            elif element_type == 'header' and len(element_text) > 5:
+                extracted['Document Title'] = element_text
+        
+        return extracted
 
 
 def create_document_processor() -> DocumentProcessor:

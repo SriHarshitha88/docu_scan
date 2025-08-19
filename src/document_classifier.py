@@ -292,7 +292,7 @@ class MultiLayerDocumentClassifier:
                 },
                 "account_context": {
                     "primary": ["account", "routing"],
-                    "secondary": [r"\d{9,12}", "****", "XXXX"],
+                    "secondary": [r"\d{9,12}", r"\*{4}", "XXXX"],
                     "weight": 1.5
                 }
             },
@@ -431,7 +431,7 @@ class MultiLayerDocumentClassifier:
             # Check table structure expectations
             if patterns["table_structure"]:
                 # Look for table-like patterns (multiple columns, aligned data)
-                table_indicators = len(re.findall(r'\t', text)) + len(re.findall(r'  +', text))
+                table_indicators = len(re.findall(r'\t', text)) + len(re.findall(r' {2,}', text))
                 if table_indicators > 10:  # Threshold for table-like structure
                     structure_score += 1.0
             
@@ -454,8 +454,14 @@ class MultiLayerDocumentClassifier:
                 
                 secondary_matches = 0
                 for pattern in context_def["secondary"]:
-                    if re.search(pattern, text, re.IGNORECASE):
-                        secondary_matches += 1
+                    try:
+                        if re.search(pattern, text, re.IGNORECASE):
+                            secondary_matches += 1
+                    except re.error as e:
+                        app_logger.warning(f"Invalid regex pattern '{pattern}': {e}")
+                        # Treat as literal string search for invalid patterns
+                        if pattern in text:
+                            secondary_matches += 1
                 
                 # Context validation requires both primary and secondary matches
                 if primary_matches > 0 and secondary_matches > 0:

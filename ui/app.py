@@ -143,26 +143,25 @@ def main():
                     progress_bar.progress(int((file_idx / len(uploaded_files)) * 100))
                     status_placeholder.info(f"📄 Processing {uploaded_file.name}...")
                     
-                    # Read file content (simulate text extraction)
-                    if uploaded_file.type == "application/pdf":
-                        # For PDF files, simulate text extraction
-                        file_text = f"Sample text content from {uploaded_file.name}. This would contain the actual extracted text from the PDF document including invoice numbers, dates, amounts, and other relevant information."
-                    else:
-                        # For images, simulate OCR text extraction
-                        file_text = f"OCR extracted text from {uploaded_file.name}. This would contain text recognized from the image including printed and handwritten content."
-                    
                     # Parse user fields
                     user_fields = None
                     if fields_to_extract.strip():
                         user_fields = [field.strip() for field in fields_to_extract.split(',')]
                     
-                    # Process document with classification and extraction
+                    # Process file with OCR and classification
                     import time
-                    time.sleep(0.5)  # Simulate processing time
+                    time.sleep(0.1)  # Small delay for UI responsiveness
                     
                     try:
-                        result = doc_processor.process_document(file_text, user_fields)
-                        processing_results.append((uploaded_file.name, result))
+                        # Read file bytes
+                        file_bytes = uploaded_file.read()
+                        file_type = uploaded_file.type
+                        
+                        # Process with OCR if available
+                        result = doc_processor.process_file(
+                            file_bytes, file_type, uploaded_file.name, user_fields
+                        )
+                        processing_results.append((uploaded_file.name, result, file_bytes, file_type))
                         
                         status_placeholder.success(f"✅ {uploaded_file.name} - {result.classification.document_type.value.title()} ({result.confidence_level} confidence)")
                         
@@ -186,11 +185,11 @@ def main():
                 with results_placeholder:
                     st.subheader("📊 Processing Results")
                     
-                    for file_name, result in processing_results:
+                    for file_name, result, file_bytes, file_type in processing_results:
                         with st.expander(f"📄 {file_name} - {result.classification.document_type.value.title()}", expanded=True):
                             
                             # Classification details
-                            col1, col2, col3 = st.columns(3)
+                            col1, col2, col3, col4 = st.columns(4)
                             
                             with col1:
                                 st.metric("Document Type", result.classification.document_type.value.title())
@@ -202,11 +201,102 @@ def main():
                             with col3:
                                 st.metric("Processing Time", f"{result.processing_time:.2f}s")
                             
+                            with col4:
+                                ocr_status = "🟢 OCR" if result.ocr_result else "🔵 Text"
+                                st.metric("Method", ocr_status)
+                            
+                            # OCR Analysis (if available)
+                            if result.ocr_result:
+                                st.subheader("🔍 OCR Analysis")
+                                
+                                ocr_col1, ocr_col2, ocr_col3 = st.columns(3)
+                                with ocr_col1:
+                                    st.metric("Characters", len(result.ocr_result.raw_text))
+                                with ocr_col2:
+                                    st.metric("Tables Found", result.table_count)
+                                with ocr_col3:
+                                    st.metric("OCR Confidence", f"{result.ocr_result.confidence:.1%}")
+                                
+                                # Table visualization
+                                if result.ocr_result.tables:
+                                    st.subheader("📊 Extracted Tables")
+                                    
+                                    # Get document processor for visualization
+                                    from visualization import create_visualizer
+                                    visualizer = create_visualizer()
+                                    
+                                    try:
+                                        table_dfs = visualizer.create_table_visualization(result.ocr_result.tables)
+                                        
+                                        for idx, df in enumerate(table_dfs):
+                                            st.write(f"**Table {idx + 1}** ({df.attrs.get('table_type', 'data')} - {df.attrs.get('confidence', 0):.1%} confidence)")
+                                            st.dataframe(df, use_container_width=True)
+                                    
+                                    except Exception as e:
+                                        st.warning(f"Table visualization failed: {e}")
+                                
+                                # Totals Analysis
+                                if result.ocr_result.totals_analysis:
+                                    st.subheader("💰 Financial Analysis")
+                                    
+                                    try:
+                                        totals_fig = visualizer.create_totals_validation_chart(result.ocr_result.totals_analysis)
+                                        if totals_fig:
+                                            st.plotly_chart(totals_fig, use_container_width=True)
+                                        else:
+                                            st.info("No financial data detected for visualization")
+                                    except Exception as e:
+                                        st.warning(f"Totals visualization failed: {e}")
+                                
+                                # Bounding Box Visualization (for images)
+                                if file_type.startswith("image/"):
+                                    st.subheader("📐 Bounding Box Visualization")
+                                    
+                                    try:
+                                        from PIL import Image
+                                        import io
+                                        
+                                        # Load original image
+                                        original_image = Image.open(io.BytesIO(file_bytes))
+                                        
+                                        # Create bounding box visualization
+                                        bbox_image = visualizer.create_bounding_box_visualization(
+                                            original_image, result.ocr_result, show_confidence=True
+                                        )
+                                        
+                                        # Display side by side
+                                        viz_col1, viz_col2 = st.columns(2)
+                                        
+                                        with viz_col1:
+                                            st.write("**Original Image**")
+                                            st.image(original_image, use_column_width=True)
+                                        
+                                        with viz_col2:
+                                            st.write("**OCR Analysis**")
+                                            st.image(bbox_image, use_column_width=True)
+                                    
+                                    except Exception as e:
+                                        st.warning(f"Image visualization failed: {e}")
+                                
+                                # Layout Analysis
+                                try:
+                                    layout_fig = visualizer.create_layout_analysis_plot(result.ocr_result)
+                                    st.subheader("📋 Layout Analysis")
+                                    st.plotly_chart(layout_fig, use_container_width=True)
+                                except Exception as e:
+                                    st.warning(f"Layout visualization failed: {e}")
+                            
                             # Extracted fields
                             if result.extracted_fields:
                                 st.subheader("🎯 Extracted Fields")
-                                for field, value in result.extracted_fields.items():
-                                    st.write(f"**{field}:** {value}")
+                                
+                                # Display in columns for better layout
+                                field_cols = st.columns(2)
+                                field_items = list(result.extracted_fields.items())
+                                
+                                for i, (field, value) in enumerate(field_items):
+                                    with field_cols[i % 2]:
+                                        st.write(f"**{field}:** {value}")
                             
                             # Classification indicators
                             if result.classification.primary_indicators:
@@ -216,7 +306,7 @@ def main():
                                     st.write("**Secondary:** " + ", ".join(result.classification.secondary_indicators))
                             
                             # Suggested fields for this document type
-                            st.subheader("💡 Suggested Fields")
+                            st.subheader("💡 Suggested Fields for This Document Type")
                             suggested_cols = st.columns(3)
                             for i, field in enumerate(result.suggested_fields[:9]):
                                 with suggested_cols[i % 3]:

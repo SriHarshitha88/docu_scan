@@ -7,3 +7,9 @@ scikit-learn
 numpy
 pandas
 nltk
+openai
+Pillow
+PyPDF2
+pdf2image
+plotly
+streamlit-plotly-events
