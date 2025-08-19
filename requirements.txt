@@ -3,3 +3,7 @@ python-dotenv
 pydantic
 pydantic-settings
 loguru
+scikit-learn
+numpy
+pandas
+nltk
