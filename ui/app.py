@@ -221,13 +221,13 @@ def main():
                                 with ocr_col3:
                                     st.metric("OCR Confidence", f"{result.ocr_result.confidence:.1%}")
                                 
+                                # Create visualizer once for all OCR visualizations
+                                from visualization import create_visualizer
+                                visualizer = create_visualizer()
+
                                 # Table visualization
                                 if result.ocr_result.tables:
                                     st.subheader("📊 Extracted Tables")
-                                    
-                                    # Get document processor for visualization
-                                    from visualization import create_visualizer
-                                    visualizer = create_visualizer()
                                     
                                     try:
                                         table_dfs = visualizer.create_table_visualization(result.ocr_result.tables)

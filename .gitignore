@@ -46,7 +46,7 @@ ehthumbs.db
 Thumbs.db
 
 # Project specific
-data/uploaded_files/
+
 outputs/logs/
 outputs/results/
 models/trained/

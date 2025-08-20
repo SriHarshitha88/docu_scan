@@ -10,5 +10,6 @@ openai
 Pillow
 PyPDF2
 pdf2image
+PyMuPDF
 plotly
 streamlit-plotly-events

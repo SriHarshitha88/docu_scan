@@ -10,7 +10,6 @@ import re
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from PIL import Image
-from pdf2image import convert_from_bytes
 import openai
 
 from config import settings
@@ -364,33 +363,60 @@ PDF Data: data:application/pdf;base64,{pdf_b64}"""
         """
         app_logger.info("Starting image-based PDF OCR extraction")
         
+        # Strategy: Try PyMuPDF (pure-Python wheels) first. If unavailable, try pdf2image (requires Poppler).
+        # If both fail, propagate the error to the caller to use the basic text fallback.
+        last_error: Optional[Exception] = None
+
+        # 1) Try PyMuPDF
         try:
-            # Convert PDF to images
+            import fitz  # PyMuPDF
+            app_logger.info("Converting PDF to images via PyMuPDF")
+            results: List[OCRResult] = []
+            with fitz.open(stream=pdf_data, filetype="pdf") as doc:
+                app_logger.info(f"PDF has {doc.page_count} pages")
+                for page_index in range(doc.page_count):
+                    page = doc.load_page(page_index)
+                    pix = page.get_pixmap(dpi=200)
+                    img_bytes = pix.tobytes("png")
+
+                    page_result = self.extract_from_image(
+                        img_bytes, extract_tables, validate_totals
+                    )
+                    results.append(page_result)
+
+            app_logger.info(f"PyMuPDF conversion completed for {len(results)} pages")
+            return results
+        except Exception as e:
+            last_error = e
+            app_logger.warning(f"PyMuPDF conversion failed: {e}")
+
+        # 2) Try pdf2image (requires Poppler on system)
+        try:
+            from pdf2image import convert_from_bytes
+            app_logger.info("Converting PDF to images via pdf2image")
             images = convert_from_bytes(pdf_data)
-            app_logger.info(f"PDF converted to {len(images)} page images")
-            
-            results = []
+            app_logger.info(f"PDF converted to {len(images)} page images via pdf2image")
+
+            results: List[OCRResult] = []
             for page_num, image in enumerate(images, 1):
                 app_logger.info(f"Processing PDF page {page_num}")
-                
-                # Convert PIL image to bytes
                 img_buffer = io.BytesIO()
                 image.save(img_buffer, format='PNG')
                 img_bytes = img_buffer.getvalue()
-                
-                # Extract from image
                 page_result = self.extract_from_image(
                     img_bytes, extract_tables, validate_totals
                 )
-                
                 results.append(page_result)
-            
-            app_logger.info(f"Image-based PDF OCR extraction completed for {len(results)} pages")
+
+            app_logger.info(f"pdf2image conversion completed for {len(results)} pages")
             return results
-            
         except Exception as e:
-            app_logger.error(f"Image-based PDF OCR extraction failed: {e}")
-            raise
+            app_logger.warning(f"pdf2image conversion failed: {e}")
+            if last_error:
+                app_logger.error(f"All image conversion methods failed. First error: {last_error}; Second error: {e}")
+            else:
+                app_logger.error("All image conversion methods failed.")
+            raise e
     
     def extract_from_pdf(self, pdf_data: bytes,
                         extract_tables: bool = True,

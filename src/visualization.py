@@ -1,7 +1,3 @@
-"""
-Visualization system for OCR results including bounding boxes, tables, and layout analysis.
-"""
-
 import io
 from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
