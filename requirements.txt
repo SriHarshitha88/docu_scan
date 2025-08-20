@@ -6,7 +6,6 @@ loguru
 scikit-learn
 numpy
 pandas
-nltk
 openai
 Pillow
 PyPDF2

@@ -111,6 +111,31 @@ To enable full OCR functionality, you need an OpenAI API key:
    ```
 3. The system will automatically use OCR for images and complex PDFs
 
+## 🧠 Agentic Extraction & Confidence Scoring
+
+- Routing: Heuristic + ML hybrid classifier (then agent type hint refinement)
+- Extraction: OpenAI structured JSON with Pydantic validation and self-consistency (n=3) majority/averaging
+- Validation: Regex/date/amount checks and cross-field rule `totals_match`
+- Per-field confidence:
+  - Formula: c = (llm^0.4) * (source^0.3) * (consensus^0.2) * (regex^0.1), bounded to [0,1]
+  - Signals: LLM confidence, OCR/source evidence, multi-sample consensus, regex/format validity
+- Overall confidence:
+  - overall = 0.6*avg(field_conf) + 0.25*classification_conf + 0.15*validation_pass_rate
+
+In the UI, you can view per-field confidence bars, overall score, QA pass/fail, copy/download JSON.
+
+## 📈 Evaluation
+
+`src/evaluation.py` includes a utility to compare extracted JSON against ground truth and compute precision/recall/F1.
+
+## 🚀 Deployment
+
+- Local: `streamlit run ui/app.py`
+- Cloud (Streamlit Community Cloud or similar):
+  - Set `OPENAI_API_KEY` in environment
+  - Ensure system deps for `pdf2image` (poppler) or rely on direct PDF path
+  - Expose `ui/app.py` as the entrypoint
+
 ## 🚀 Future Enhancements
 
 - Multiple export formats (CSV, JSON, Excel)

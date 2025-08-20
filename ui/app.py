@@ -8,6 +8,7 @@ sys.path.append(str(Path(__file__).parent.parent / "src"))
 from config import settings
 from logger import app_logger
 from document_processor import create_document_processor
+from extraction_agent import ExtractionOutput
 
 
 def get_ui_config():
@@ -295,8 +296,58 @@ def main():
                                 field_items = list(result.extracted_fields.items())
                                 
                                 for i, (field, value) in enumerate(field_items):
+                                    if field == "__agent_meta__":
+                                        continue
                                     with field_cols[i % 2]:
                                         st.write(f"**{field}:** {value}")
+
+                                # Agent metadata and confidence bars
+                                agent_meta = result.extracted_fields.get("__agent_meta__")
+                                if agent_meta:
+                                    st.markdown("---")
+                                    st.subheader("🔎 Confidence & QA")
+                                    st.write(f"**Overall Confidence:** {agent_meta.get('overall_confidence', 0):.1%}")
+                                    qa = agent_meta.get("qa", {})
+                                    if qa:
+                                        passed = qa.get("passed_rules", [])
+                                        failed = qa.get("failed_rules", [])
+                                        notes = qa.get("notes")
+                                        if passed:
+                                            st.success("Passed rules: " + ", ".join(passed))
+                                        if failed:
+                                            st.warning("Failed rules: " + ", ".join(failed))
+                                        if notes:
+                                            st.info(notes)
+
+                                    # Per-field confidence bars if available
+                                    agent_fields = result.extracted_fields.get("__agent_fields__")
+                                    if agent_fields:
+                                        st.subheader("📈 Field Confidences")
+                                        for f in agent_fields:
+                                            name = f.get("name")
+                                            conf = float(f.get("confidence") or 0.0)
+                                            st.progress(conf)
+                                            st.caption(f"{name}: {conf:.1%}")
+
+                                    # JSON output (copy/download)
+                                    try:
+                                        json_output = {
+                                            "doc_type": agent_meta.get("doc_type", "unknown"),
+                                            "fields": agent_fields or [],
+                                            "overall_confidence": agent_meta.get("overall_confidence", 0.0),
+                                            "qa": agent_meta.get("qa", {})
+                                        }
+                                        st.subheader("🧾 JSON Output")
+                                        st.json(json_output)
+                                        import json as _json
+                                        st.download_button(
+                                            label="Download JSON",
+                                            data=_json.dumps(json_output, indent=2).encode("utf-8"),
+                                            file_name=f"{file_name}_extraction.json",
+                                            mime="application/json"
+                                        )
+                                    except Exception as e:
+                                        st.warning(f"JSON rendering failed: {e}")
                             
                             # Classification indicators
                             if result.classification.primary_indicators:

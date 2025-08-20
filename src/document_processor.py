@@ -11,6 +11,7 @@ from document_classifier import create_classifier, DocumentType, ClassificationR
 from ml_fallback import create_hybrid_classifier
 from ocr_service import create_ocr_service, OCRResult
 from visualization import create_visualizer
+from extraction_agent import create_extraction_agent, ExtractionOutput, AgentConfig
 from logger import app_logger
 
 
@@ -56,6 +57,14 @@ class DocumentProcessor:
         
         # Field extraction templates based on document types
         self._setup_extraction_templates()
+
+        # Extraction agent
+        try:
+            self.extraction_agent = create_extraction_agent()
+            app_logger.info("Extraction agent initialized")
+        except Exception as e:
+            app_logger.warning(f"Extraction agent not available: {e}")
+            self.extraction_agent = None
     
     def _setup_extraction_templates(self):
         """Setup field extraction templates for different document types."""
@@ -183,8 +192,8 @@ class DocumentProcessor:
             text = f"Unsupported file type: {file_type}"
             app_logger.warning(f"Unsupported file type: {file_type}")
         
-        # Continue with standard document processing
-        result = self.process_document(text, user_fields)
+        # Continue with standard document processing, pass OCR if available
+        result = self.process_document(text, user_fields, ocr_result)
         
         # Enhance result with OCR data
         result.ocr_result = ocr_result
@@ -202,7 +211,8 @@ class DocumentProcessor:
         app_logger.info(f"File processing completed in {result.processing_time:.2f}s")
         return result
     
-    def process_document(self, text: str, user_fields: Optional[List[str]] = None) -> ProcessingResult:
+    def process_document(self, text: str, user_fields: Optional[List[str]] = None,
+                        ocr: Optional[OCRResult] = None) -> ProcessingResult:
         """
         Process document with classification and field extraction.
         
@@ -225,8 +235,37 @@ class DocumentProcessor:
             classification_result.document_type, user_fields
         )
         
-        # Step 3: Extract fields (placeholder for now)
-        extracted_fields = self._extract_fields(text, suggested_fields, classification_result)
+        # Step 3: Extract fields using agent if available, otherwise fallback
+        extracted_fields = {}
+        if self.extraction_agent:
+            try:
+                agent_out: ExtractionOutput = self.extraction_agent.extract(
+                    text=text,
+                    classification=classification_result,
+                    ocr=ocr,
+                    user_fields=suggested_fields,
+                    config=AgentConfig(num_samples=3, temperature=0.3)
+                )
+
+                # Convert to flat dict for backward compatibility
+                extracted_fields = {f.name: f.value for f in agent_out.fields}
+                # Attach QA-style info into extracted fields under a special key
+                extracted_fields["__agent_meta__"] = {
+                    "doc_type": agent_out.doc_type,
+                    "overall_confidence": agent_out.overall_confidence,
+                    "qa": agent_out.qa.dict(),
+                }
+                # Attach detailed fields for UI
+                extracted_fields["__agent_fields__"] = [
+                    {"name": f.name, "value": f.value, "confidence": f.confidence,
+                     "source": f.source.dict() if f.source else None}
+                    for f in agent_out.fields
+                ]
+            except Exception as e:
+                app_logger.warning(f"Agent extraction failed, using heuristic extraction: {e}")
+                extracted_fields = self._extract_fields(text, suggested_fields, classification_result)
+        else:
+            extracted_fields = self._extract_fields(text, suggested_fields, classification_result)
         
         # Step 4: Calculate processing time
         processing_time = time.time() - start_time
