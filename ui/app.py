@@ -2,13 +2,16 @@ import streamlit as st
 import sys
 from pathlib import Path
 
-# Add src directory to Python path
-sys.path.append(str(Path(__file__).parent.parent / "src"))
+# Add project root and src directory to Python path (robust for different run contexts)
+project_root = Path(__file__).parent.parent
+src_dir = project_root / "src"
+for p in [str(project_root), str(src_dir)]:
+    if p not in sys.path:
+        sys.path.append(p)
 
 from config import settings
 from logger import app_logger
 from document_processor import create_document_processor
-from extraction_agent import ExtractionOutput
 
 
 def get_ui_config():

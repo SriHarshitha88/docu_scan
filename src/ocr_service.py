@@ -7,12 +7,9 @@ import base64
 import io
 import json
 import re
-from typing import Dict, List, Optional, Tuple, Any, Union
-from dataclasses import dataclass, field
-from pathlib import Path
-import pandas as pd
+from typing import Dict, List, Optional, Any
+from dataclasses import dataclass
 from PIL import Image
-import PyPDF2
 from pdf2image import convert_from_bytes
 import openai
 
@@ -461,8 +458,6 @@ PDF Data: data:application/pdf;base64,{pdf_b64}"""
     
     def _extract_structured_text(self, image_b64: str) -> List[ExtractedText]:
         """Extract structured text elements with positioning."""
-        # For now, create structured elements from raw text
-        # In a full implementation, this would use more sophisticated positioning
         structured_elements = []
         
         try:
@@ -580,8 +575,6 @@ PDF Data: data:application/pdf;base64,{pdf_b64}"""
     
     def _analyze_layout(self, image_b64: str) -> Dict[str, Any]:
         """Analyze document layout and structure."""
-        # Placeholder for layout analysis
-        # Would implement spatial analysis, column detection, etc.
         return {
             "document_type": "unknown",
             "columns": 1,

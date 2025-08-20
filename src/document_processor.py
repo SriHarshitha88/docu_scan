@@ -1,11 +1,6 @@
-"""
-Document processing integration that combines classification with extraction.
-"""
-
 from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass
 import time
-import io
 
 from document_classifier import create_classifier, DocumentType, ClassificationResult
 from ml_fallback import create_hybrid_classifier

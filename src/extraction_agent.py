@@ -1,11 +1,4 @@
-"""
-Agentic extraction chain that routes by document type, calls OpenAI for
-structured extraction, performs self-consistency aggregation, validation,
-and confidence scoring per field and overall.
-"""
-
 from __future__ import annotations
-
 from typing import List, Optional, Dict, Any, Tuple
 from dataclasses import dataclass
 import json
