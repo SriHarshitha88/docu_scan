@@ -190,37 +190,6 @@ print(f"Document Type: {result.classification.document_type}")
 print(f"Confidence: {result.confidence_level}")
 print(f"Extracted Fields: {result.extracted_fields}")
 ```
-
-### **Advanced Extraction with Custom Fields**
-```python
-# Specify custom fields to extract
-custom_fields = [
-    "Invoice Number",
-    "Total Amount", 
-    "Due Date",
-    "Vendor Name"
-]
-
-result = processor.process_file(
-    file_data=pdf_bytes,
-    file_type="application/pdf",
-    file_name="custom_invoice.pdf",
-    user_fields=custom_fields
-)
-
-# Export to JSON
-import json
-output = {
-    "document_type": result.classification.document_type.value,
-    "confidence": result.classification.confidence,
-    "fields": result.extracted_fields,
-    "processing_time": result.processing_time
-}
-
-with open("extraction_result.json", "w") as f:
-    json.dump(output, f, indent=2)
-```
-
 ---
 
 ## 📊 **Sample Output**
@@ -260,36 +229,6 @@ with open("extraction_result.json", "w") as f:
 
 ---
 
-## 📁 **Project Structure**
-
-```
-docu_scan/
-├── 📂 src/                          # Core processing modules
-│   ├── 🧠 document_classifier.py    # Multi-layer classification
-│   ├── 📄 document_processor.py     # Main processing orchestrator  
-│   ├── 🤖 extraction_agent.py       # OpenAI-powered extraction
-│   ├── 👁️ ocr_service.py           # OCR and vision processing
-│   ├── ✅ validation.py             # Quality assurance rules
-│   ├── 📊 scoring.py               # Confidence calculations
-│   ├── 🎨 visualization.py         # Charts and overlays
-│   ├── 🔧 ml_fallback.py          # Backup ML classifier
-│   ├── ⚙️ config.py               # Application settings
-│   └── 📝 logger.py               # Logging configuration
-├── 📱 ui/
-│   └── 🖥️ app.py                   # Streamlit web interface
-├── 🏗️ models/
-│   └── 🤖 ml_fallback_classifier.pkl # Trained ML model
-├── 📊 outputs/
-│   └── 📋 logs/                     # Application logs
-├── 📁 data/                         # Sample documents (Git LFS)
-│   └── 🗓️ 2024/                    # Organized by year/country
-├── 📋 requirements.txt              # Python dependencies
-├── 🔧 .env.example                 # Environment template
-└── 📖 README.md                    # This file
-```
-
----
-
 ## 🔧 **Technical Specifications**
 
 ### **Performance Metrics**
@@ -310,29 +249,6 @@ docu_scan/
 - 🎯 **Confidence Thresholds**: Configurable acceptance criteria
 - 🔍 **Self-Consistency**: Multi-sample agreement validation
 - 📊 **QA Reporting**: Detailed pass/fail analysis
-
----
-
-## 🔬 **Advanced Features**
-
-### **📊 Rich Visualizations**
-- **Bounding Box Overlays** - Visual field extraction mapping
-- **Table Recognition** - Structured data extraction from tables  
-- **Financial Analysis Charts** - Totals validation and breakdown
-- **Confidence Heat Maps** - Per-field reliability scoring
-- **Layout Analysis** - Document structure understanding
-
-### **🤖 Intelligent Extraction**
-- **Schema-Aware Processing** - Document-type specific templates
-- **Self-Consistency Checking** - Multi-sample validation
-- **Context-Aware Field Mapping** - Smart field name normalization
-- **Hierarchical Confidence** - Field and document-level scoring
-
-### **🛡️ Enterprise Security**
-- **Data Privacy** - No persistent storage of sensitive documents
-- **API Key Management** - Secure OpenAI integration  
-- **Input Validation** - Malware and size checks
-- **Error Handling** - Graceful failure with detailed logging
 
 ---
 
@@ -364,71 +280,6 @@ docu_scan/
 
 ---
 
-## 🧪 **Testing & Development**
-
-### **Running Tests**
-```bash
-# Install test dependencies
-pip install pytest pytest-cov
-
-# Run test suite
-pytest tests/ -v --cov=src
-
-# Run specific test categories
-pytest tests/test_classification.py -v
-pytest tests/test_extraction.py -v
-```
-
-### **Development Setup**
-```bash
-# Install development dependencies
-pip install -e .
-pip install black flake8 mypy
-
-# Code formatting
-black src/ tests/
-flake8 src/ tests/
-
-# Type checking  
-mypy src/
-```
-
----
-
-## 📈 **Performance Benchmarks**
-
-| Document Type | Avg Processing Time | Classification Accuracy | Field Extraction Rate |
-|---------------|-------------------|------------------------|----------------------|
-| 💰 Invoices   | 3.2s             | 96.5%                 | 92.1%               |
-| 🏥 Medical    | 4.1s             | 94.2%                 | 89.7%               |  
-| 🛒 Receipts   | 2.8s             | 97.8%                 | 94.3%               |
-| 📄 Contracts  | 5.5s             | 91.6%                 | 87.2%               |
-| 💼 Financial  | 4.0s             | 93.4%                 | 90.8%               |
-
-*Benchmarks based on 1000+ test documents across various formats and languages*
-
----
-
-## 🤝 **Contributing**
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-
-### **Development Process**
-1. 🍴 Fork the repository
-2. 🌿 Create a feature branch
-3. ✍️ Make your changes with tests
-4. 🧪 Ensure all tests pass
-5. 📝 Update documentation
-6. 🚀 Submit a pull request
-
-### **Code Style**
-- Follow PEP 8 guidelines
-- Use type hints throughout
-- Maintain 90%+ test coverage
-- Document all public APIs
-
----
-
 ## 📄 **License**
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
@@ -444,35 +295,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-## 📞 **Contact & Support**
-
-### **Created by: [Your Name]**
-- 🌐 **Portfolio**: [your-portfolio.com](https://your-portfolio.com)  
-- 💼 **LinkedIn**: [linkedin.com/in/yourprofile](https://linkedin.com/in/yourprofile)
-- 📧 **Email**: your.email@gmail.com
-- 🐱 **GitHub**: [@yourusername](https://github.com/yourusername)
-
-### **Project Links**
-- 📖 **Documentation**: [docs-link.com](https://docs-link.com)
-- 🐛 **Issues**: [GitHub Issues](https://github.com/yourusername/docu_scan/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/yourusername/docu_scan/discussions)
-
----
-
-## 🚀 **What's Next?**
-
-### **Roadmap**
-- [ ] 🌐 Multi-language support (Spanish, French, German)
-- [ ] 📱 Mobile-responsive interface
-- [ ] 🔄 Batch processing capabilities  
-- [ ] 🗄️ Database integration options
-- [ ] 🤖 Custom model fine-tuning
-- [ ] 📡 REST API endpoints
-- [ ] 🐳 Docker containerization
-- [ ] ☁️ Cloud deployment templates
-
----
-
-⭐ **If you find this project helpful, please consider giving it a star on GitHub!** ⭐
-
-*Built with ❤️ and cutting-edge AI technology*
