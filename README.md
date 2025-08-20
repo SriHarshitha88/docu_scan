@@ -59,11 +59,7 @@ graph TB
     
     O --> P[📤 JSON Export]
     O --> Q[📈 Interactive UI]
-    
-    style A fill:#e1f5fe
-    style L fill:#f3e5f5
-    style O fill:#e8f5e8
-    style P fill:#fff3e0
+
 ```
 
 ---
